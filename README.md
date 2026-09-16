@@ -1,3 +1,4 @@
+
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -52,6 +53,30 @@ header p{margin:0;opacity:.92;font-size:14px}
   transition:width .35s ease;
 }
 
+/* -------- Botão liga/desliga som -------- */
+.sound-toggle{
+  flex-shrink:0;
+  width:40px;height:40px;
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:10px;
+  font-size:18px;line-height:1;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s ease;
+  font-family:inherit;
+  padding:0;
+}
+.sound-toggle:hover{
+  border-color:var(--accent);
+  background:var(--accent2);
+  transform:translateY(-1px);
+}
+.sound-toggle.muted{
+  opacity:.5;
+  filter:grayscale(1);
+}
+
 .card{
   background:var(--card);
   border:1px solid var(--line);
@@ -93,7 +118,6 @@ header p{margin:0;opacity:.92;font-size:14px}
 }
 .statement i{color:#2a4a6b}
 
-/* -------- Cronômetro -------- */
 .timer-display{
   display:flex;align-items:center;gap:10px;
   padding:10px 14px;margin-bottom:14px;
@@ -124,7 +148,6 @@ header p{margin:0;opacity:.92;font-size:14px}
 .timer-display.danger .t-value{color:var(--err)}
 .timer-display.danger .t-bar > div{background:var(--err)}
 
-/* -------- Botões V/F -------- */
 .vf{display:flex;gap:10px;flex-wrap:wrap}
 .vf button{
   flex:1;min-width:130px;
@@ -147,7 +170,6 @@ header p{margin:0;opacity:.92;font-size:14px}
   background:var(--err-bg);border-color:var(--err);color:var(--err);
 }
 
-/* -------- Feedback -------- */
 .feedback{
   display:none;margin-top:14px;
   padding:14px 16px;border-radius:12px;
@@ -170,7 +192,6 @@ header p{margin:0;opacity:.92;font-size:14px}
   margin-bottom:6px;
 }
 
-/* -------- Próxima -------- */
 .next-wrap{
   display:none;
   justify-content:center;
@@ -188,7 +209,6 @@ header p{margin:0;opacity:.92;font-size:14px}
 }
 .next-wrap button:hover{transform:translateY(-2px)}
 
-/* -------- Overlay "ESTUDE MAIS" -------- */
 .study-overlay{
   position:fixed;inset:0;z-index:100;
   display:flex;flex-direction:column;
@@ -229,7 +249,6 @@ header p{margin:0;opacity:.92;font-size:14px}
   50%{transform:scale(1.06)}
 }
 
-/* -------- Resultado final -------- */
 .results{
   text-align:center;padding:34px 20px;
   background:#fff;border:1px solid var(--line);
@@ -372,7 +391,6 @@ header p{margin:0;opacity:.92;font-size:14px}
 .intro-hint{margin:12px 0 0;font-size:12px;color:var(--muted)}
 .intro-hint b{color:var(--accent)}
 
-/* -------- Ações -------- */
 .actions{
   display:flex;gap:12px;justify-content:center;
   flex-wrap:wrap;margin:6px 0 40px;
@@ -406,6 +424,7 @@ footer b{color:var(--accent)}
   .statement{font-size:15.5px}
   .vf button{min-width:0;padding:11px 12px;font-size:14px}
   .timer-display .t-value{font-size:19px;min-width:44px}
+  .sound-toggle{width:36px;height:36px;font-size:16px}
 
   .intro{padding:14px}
   .intro-hero{height:160px}
@@ -453,7 +472,8 @@ footer b{color:var(--accent)}
       <ul class="intro-rules">
         <li><b>14 questões</b> de Verdadeiro ou Falso</li>
         <li><b>10 s</b> para responder cada uma</li>
-        <li>Errou? Overlay <b>“ESTUDE MAIS”</b> por 5 s com a correção</li>
+        <li>Errou? Overlay <b>“ESTUDE MAIS”</b> por 5 s com correção, <b>som e vibração</b></li>
+        <li>Toque em <b>“Iniciar”</b> para ativar o som (necessário no iPhone)</li>
       </ul>
 
       <button type="button" id="startBtn">Iniciar simulado →</button>
@@ -474,6 +494,7 @@ footer b{color:var(--accent)}
     <span class="pill" id="scorePill">Acertos: 0 / 0</span>
     <span class="pill" id="progressPill">Progresso: 0 / 0</span>
     <div class="progress"><div id="progressFill"></div></div>
+    <button class="sound-toggle" id="soundToggle" type="button" aria-label="Alternar som" title="Ligar/desligar som">🔊</button>
   </div>
 
   <div id="quiz"></div>
@@ -599,9 +620,9 @@ const questions = [
 ];
 
 /* ================================ ESTADO ================================ */
-const ANSWER_TIME  = 10;  // segundos para responder
-const CORRECT_WAIT = 5;   // espera após acerto
-const WRONG_WAIT   = 5;   // castigo após erro
+const ANSWER_TIME  = 10;
+const CORRECT_WAIT = 5;
+const WRONG_WAIT   = 5;
 
 const quizEl         = document.getElementById('quiz');
 const scorePill      = document.getElementById('scorePill');
@@ -611,6 +632,7 @@ const studyOverlay   = document.getElementById('studyOverlay');
 const studyCountdown = document.getElementById('studyCountdown');
 const introScreen    = document.getElementById('introScreen');
 const startBtn       = document.getElementById('startBtn');
+const soundToggle    = document.getElementById('soundToggle');
 const total          = questions.length;
 
 let score        = 0;
@@ -622,6 +644,129 @@ function clearActiveTimer() {
   if (activeTimer) { clearInterval(activeTimer); activeTimer = null; }
 }
 
+/* ====================== VIBRAÇÃO (Android) ====================== */
+const supportsVibrate = ('vibrate' in navigator);
+
+function vibrate(pattern) {
+  if (!supportsVibrate) return;
+  try { navigator.vibrate(pattern); } catch (e) {}
+}
+function stopVibrate() {
+  if (!supportsVibrate) return;
+  try { navigator.vibrate(0); } catch (e) {}
+}
+
+/* ====================== ÁUDIO (Web Audio API — funciona no iOS) ======================
+   iOS exige que o AudioContext seja criado/retomado após um gesto do usuário.
+   Por isso inicializamos no clique do botão "Iniciar simulado". */
+let audioCtx = null;
+let activeOscillators = [];
+
+/* Armazenamento seguro — evita crash em prévias sandboxed / file:// */
+const safeStorage = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+};
+
+let soundEnabled = safeStorage.get('pq_sound') !== 'off';
+
+function initAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { audioCtx = null; return; }
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  } catch (e) {
+    audioCtx = null; // segue sem áudio, mas o quiz funciona
+  }
+}
+
+function playTone(opts) {
+  if (!soundEnabled || !audioCtx) return;
+  const { freq=440, duration=0.15, type='sine', volume=0.15, when=0 } = opts;
+  const t0 = audioCtx.currentTime + when;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.03);
+  activeOscillators.push(osc);
+  osc.onended = () => {
+    const i = activeOscillators.indexOf(osc);
+    if (i >= 0) activeOscillators.splice(i, 1);
+  };
+}
+
+function stopAllSounds() {
+  activeOscillators.forEach(o => { try { o.stop(); } catch(e){} });
+  activeOscillators = [];
+}
+
+/* ---------- Efeitos sonoros ---------- */
+function sfxStart() {
+  // notinhas rápidas "vamos lá"
+  playTone({freq: 523, duration: 0.10, type:'triangle', volume: 0.14, when: 0});
+  playTone({freq: 784, duration: 0.14, type:'triangle', volume: 0.14, when: 0.10});
+}
+
+function sfxCorrect() {
+  // sininho agradável ascendente
+  playTone({freq: 660, duration: 0.10, type:'sine', volume: 0.18, when: 0});
+  playTone({freq: 990, duration: 0.18, type:'sine', volume: 0.18, when: 0.11});
+}
+
+function sfxWrongAlarm() {
+  // 🚨 Buzzer de alarme — padrão alternado tipo sirene
+  const pattern = [
+    {f: 500, d: 0.13}, {f: 800, d: 0.13},
+    {f: 500, d: 0.13}, {f: 800, d: 0.13},
+    {f: 500, d: 0.13}, {f: 800, d: 0.20}
+  ];
+  let t = 0;
+  pattern.forEach(p => {
+    playTone({freq: p.f, duration: p.d, type:'square', volume: 0.16, when: t});
+    t += p.d + 0.02;
+  });
+}
+
+function sfxTick() {
+  // bipe curto a cada segundo
+  playTone({freq: 1100, duration: 0.06, type:'square', volume: 0.09});
+}
+
+function sfxFinish() {
+  // fanfarra final C - E - G
+  playTone({freq: 523, duration: 0.14, type:'triangle', volume: 0.2, when: 0});
+  playTone({freq: 659, duration: 0.14, type:'triangle', volume: 0.2, when: 0.15});
+  playTone({freq: 784, duration: 0.30, type:'triangle', volume: 0.2, when: 0.30});
+}
+
+/* ---------- Botão liga/desliga som ---------- */
+function updateSoundToggle() {
+  if (!soundToggle) return;
+  soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+  soundToggle.classList.toggle('muted', !soundEnabled);
+  soundToggle.setAttribute('aria-pressed', String(!soundEnabled));
+}
+
+soundToggle.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  safeStorage.set('pq_sound', soundEnabled ? 'on' : 'off');
+  updateSoundToggle();
+  try {
+    initAudio();
+    if (soundEnabled) playTone({freq: 880, duration: 0.09, type:'triangle', volume: 0.15});
+    else stopAllSounds();
+  } catch (e) {}
+});
+updateSoundToggle();
+
 function updateHUD() {
   scorePill.textContent    = `Acertos: ${score} / ${total}`;
   progressPill.textContent = `Progresso: ${answered} / ${total}`;
@@ -631,8 +776,21 @@ function updateHUD() {
 /* ========================== INÍCIO DO SIMULADO ========================== */
 function startQuiz() {
   if (!introScreen || introScreen.classList.contains('hide')) return;
+
+  // 1) Fecha a intro PRIMEIRO — o quiz nunca fica travado por falha de áudio
   introScreen.classList.add('hide');
   introScreen.setAttribute('aria-hidden', 'true');
+
+  // 2) Áudio e vibração dentro de try/catch (não podem quebrar o fluxo)
+  try {
+    initAudio();
+    if (soundEnabled) sfxStart();
+    vibrate(60);
+  } catch (e) {
+    console.warn('Áudio/vibração indisponíveis:', e);
+  }
+
+  // 3) Renderiza a primeira questão
   renderQuestion();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -781,6 +939,10 @@ function startCorrectFlow(card) {
   label.textContent = 'Próxima em';
   wrap.classList.remove('warn', 'danger');
 
+  // 🎵 som de acerto + vibração leve (Android)
+  if (soundEnabled) sfxCorrect();
+  vibrate(80);
+
   let timeLeft = CORRECT_WAIT;
   paintWait(wrap, value, fill, timeLeft, CORRECT_WAIT);
 
@@ -800,6 +962,12 @@ function startWrongFlow(card) {
   studyOverlay.classList.add('show');
   studyOverlay.setAttribute('aria-hidden', 'false');
 
+  // 🚨 Alarme sonoro (funciona iOS + Android)
+  if (soundEnabled) sfxWrongAlarm();
+
+  // 📳 Vibração forte no Android
+  vibrate([400, 120, 400, 120, 400, 120, 400, 120, 400]);
+
   const wrap  = card.querySelector('#timerDisplay');
   const label = card.querySelector('#timerLabel');
   const value = card.querySelector('#timerValue');
@@ -814,8 +982,17 @@ function startWrongFlow(card) {
     timeLeft--;
     studyCountdown.textContent = Math.max(0, timeLeft) + 's';
     paintWait(wrap, value, fill, timeLeft, WRONG_WAIT);
+
+    // Bipe + vibração a cada segundo do castigo
+    if (timeLeft > 0) {
+      if (soundEnabled) sfxTick();
+      vibrate(60);
+    }
+
     if (timeLeft <= 0) {
       clearActiveTimer();
+      stopVibrate();
+      stopAllSounds();
       studyOverlay.classList.remove('show');
       studyOverlay.setAttribute('aria-hidden', 'true');
       showNextButton(card);
@@ -829,7 +1006,6 @@ function paintWait(wrap, value, fill, timeLeft, totalTime) {
   value.textContent = Math.max(0, timeLeft) + 's';
   wrap.classList.remove('warn', 'danger');
   if (totalTime === WRONG_WAIT) {
-    // castigo: barra vermelha o tempo todo
     wrap.classList.add('danger');
   } else if (timeLeft <= 3) {
     wrap.classList.add('danger');
@@ -846,6 +1022,8 @@ function showNextButton(card) {
 /* ============================ NAVEGAÇÃO ============================ */
 function nextQuestion() {
   clearActiveTimer();
+  stopVibrate();
+  stopAllSounds();
   studyOverlay.classList.remove('show');
   studyOverlay.setAttribute('aria-hidden', 'true');
   currentIndex++;
@@ -855,9 +1033,11 @@ function nextQuestion() {
 
 function reset() {
   clearActiveTimer();
+  stopVibrate();
+  stopAllSounds();
   studyOverlay.classList.remove('show');
   studyOverlay.setAttribute('aria-hidden', 'true');
-  introScreen.classList.add('hide');       // garante que a intro não volte
+  introScreen.classList.add('hide');
   introScreen.setAttribute('aria-hidden', 'true');
   score = 0;
   answered = 0;
@@ -874,6 +1054,10 @@ function showResults() {
   else if (pct >= 80)           msg = 'Muito bom! Revise só os erros.';
   else if (pct >= 60)           msg = 'Razoável — foque nos pontos que errou.';
 
+  // 🎉 Fanfarra + vibração final
+  if (soundEnabled) sfxFinish();
+  vibrate([120, 80, 120, 80, 250]);
+
   quizEl.innerHTML = `
     <div class="results">
       <h2>Simulado concluído!</h2>
@@ -887,7 +1071,6 @@ function showResults() {
 
 /* ============================ ATALHOS DE TECLADO ============================ */
 document.addEventListener('keydown', (e) => {
-  // Intro aberta: Enter/Espaço inicia o simulado
   if (introScreen && !introScreen.classList.contains('hide')) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -896,7 +1079,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  if (studyOverlay.classList.contains('show')) return; // não deixa pular o castigo
+  if (studyOverlay.classList.contains('show')) return;
   const card = document.querySelector('.card');
   if (!card) return;
 
@@ -918,8 +1101,22 @@ document.addEventListener('keydown', (e) => {
 document.getElementById('resetBtn').addEventListener('click', reset);
 startBtn.addEventListener('click', startQuiz);
 
+// iOS: mantém o contexto de áudio "acordado" a cada toque (rede de segurança)
+document.addEventListener('click', () => {
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(()=>{});
+  }
+}, {passive: true});
+
+// Para tudo se a aba perder o foco
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopVibrate();
+    stopAllSounds();
+  }
+});
+
 updateHUD();
-// O simulado só começa depois que a tela de abertura for fechada.
 </script>
 </body>
 </html>
